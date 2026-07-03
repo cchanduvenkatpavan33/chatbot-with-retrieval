@@ -1,0 +1,19 @@
+Artificial Intelligence (AI) is the simulation of human intelligence by machines.
+
+Machine Learning is a subset of Artificial Intelligence that enables computers to learn from data.
+
+Deep Learning is a subset of Machine Learning that uses neural networks with multiple layers.
+
+Python is one of the most popular programming languages used for Artificial Intelligence, Machine Learning, Data Science, and Web Development.
+
+Natural Language Processing (NLP) helps computers understand and process human language.
+
+Retrieval-Augmented Generation (RAG) combines document retrieval with Large Language Models to generate accurate responses.
+
+Streamlit is an open-source Python framework used to build interactive web applications for Machine Learning and Data Science.
+
+FAISS is a vector database developed by Meta that performs fast similarity search.
+
+Embeddings convert text into numerical vectors that capture semantic meaning.
+
+LangChain is a framework for building applications powered by Large Language Models.
