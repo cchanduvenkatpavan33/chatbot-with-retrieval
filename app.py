@@ -1,53 +1,66 @@
-import streamlit as st
 import os
+import streamlit as st
+import google.generativeai as genai
 from dotenv import load_dotenv
 
+from langchain_community.document_loaders import (
+    TextLoader,
+    PyPDFLoader,
+    Docx2txtLoader,
+)
+
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
-import google.generativeai as genai
+# ======================================================
+# PAGE CONFIG
+# ======================================================
 
-# ---------------------------------------
-# Load Environment Variables
-# ---------------------------------------
+st.set_page_config(
+    page_title="AI Retrieval Assistant",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ======================================================
+# LOAD ENVIRONMENT
+# ======================================================
 
 load_dotenv()
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 if not GOOGLE_API_KEY:
-    st.error("❌ GOOGLE_API_KEY not found inside .env file")
+    st.error("❌ GOOGLE_API_KEY not found.")
     st.stop()
 
 genai.configure(api_key=GOOGLE_API_KEY)
 
 model = genai.GenerativeModel("gemini-2.5-flash")
 
-# ---------------------------------------
-# Page Configuration
-# ---------------------------------------
+# ======================================================
+# SESSION STATE
+# ======================================================
 
-st.set_page_config(
-    page_title="AI Retrieval Assistant",
-    page_icon="🤖",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# ---------------------------------------
-# Custom CSS
-# ---------------------------------------
+if "vector_db" not in st.session_state:
+    st.session_state.vector_db = None
 
-st.markdown("""
+# ======================================================
+# CUSTOM CSS
+# ======================================================
+
+st.markdown(
+    """
 <style>
 
-html, body, [class*="css"]{
-    background:#0E1117;
-    color:white;
-    font-family:Segoe UI;
+.block-container{
+    padding-top:1.5rem;
 }
-
-/* Hide Streamlit Menu */
 
 #MainMenu{
 visibility:hidden;
@@ -61,225 +74,215 @@ header{
 visibility:hidden;
 }
 
-/* Sidebar */
-
-section[data-testid="stSidebar"]{
-
-background:#1A1C24;
-
-}
-
-/* Buttons */
-
 .stButton>button{
-
 width:100%;
-
-height:55px;
-
 border-radius:12px;
-
-background:#4F46E5;
-
-color:white;
-
-font-size:18px;
-
+height:48px;
 font-weight:bold;
-
-border:none;
-
-transition:0.3s;
-
 }
 
-.stButton>button:hover{
-
-background:#6D5EF9;
-
-transform:scale(1.02);
-
-}
-
-/* Text Area */
-
-textarea{
-
-border-radius:12px !important;
-
-}
-
-/* Chat Card */
-
-.chat-card{
-
-background:#1A1C24;
-
-padding:20px;
-
-border-radius:15px;
-
-margin-bottom:15px;
-
-border:1px solid #30363D;
-
-}
-
-/* Title */
-
-.big-title{
-
+.chat-title{
+font-size:42px;
+font-weight:700;
 text-align:center;
-
-font-size:58px;
-
-font-weight:800;
-
-color:white;
-
+margin-bottom:5px;
 }
 
-.subtitle{
-
+.chat-subtitle{
 text-align:center;
-
-font-size:24px;
-
-color:#A0AEC0;
-
-margin-bottom:30px;
-
+color:gray;
+margin-bottom:25px;
 }
 
 </style>
+""",
+    unsafe_allow_html=True,
+)
 
-""", unsafe_allow_html=True)
-# ============================================================
-# Sidebar
-# ============================================================
+# ======================================================
+# SIDEBAR
+# ======================================================
 
 with st.sidebar:
 
-    st.markdown("## 🤖 AI Retrieval Assistant")
+    st.image("assets/logo.png", width=90)
 
-    st.success("🟢 System Ready")
+    st.title("AI Retrieval Assistant")
+
+    st.success("🟢 Ready")
 
     st.divider()
 
-    st.markdown("### ⚙️ Technology")
+    st.markdown("### 🚀 Technology")
 
     st.markdown("""
-✅ Gemini 2.5 Flash
-
-✅ LangChain
-
-✅ HuggingFace
-
-✅ FAISS
-
-✅ Streamlit
-""")
-
-    st.divider()
-
-    st.info("""
-This chatbot uses **Retrieval-Augmented Generation (RAG)**.
-
-It first searches your uploaded documents and then Gemini generates the final answer.
+- Gemini 2.5 Flash
+- LangChain
+- HuggingFace
+- FAISS
+- Streamlit
 """)
 
     st.divider()
 
     uploaded_files = st.file_uploader(
         "📂 Upload Documents",
-        type=["txt", "pdf", "docx"],
-        accept_multiple_files=True
+        type=["pdf", "docx", "txt"],
+        accept_multiple_files=True,
     )
 
-    if uploaded_files:
-
-        os.makedirs("documents", exist_ok=True)
-
-        uploaded = 0
-
-        for file in uploaded_files:
-
-            save_path = os.path.join("documents", file.name)
-
-            with open(save_path, "wb") as f:
-                f.write(file.read())
-
-            uploaded += 1
-
-        st.success(f"✅ {uploaded} file(s) uploaded")
-
-        if st.button("🔄 Rebuild Knowledge Base"):
-
-            with st.spinner("Building Vector Database..."):
-
-                os.system("python ingest.py")
-
-            st.success("Knowledge Base Updated!")
-
-    st.divider()
-
-    if st.button("🗑 Clear Chat"):
-
-        st.session_state.messages = []
-
-        st.rerun()
-        # ============================================================
-# Chat History
-# ============================================================
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    # ============================================================
-# Load Vector Database
-# ============================================================
-
-embedding = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
-
-try:
-
-    db = FAISS.load_local(
-        "vectorstore",
-        embedding,
-        allow_dangerous_deserialization=True
-    )
-
-except:
-
-    st.warning("⚠ Vector database not found.")
-
-    st.stop()
-    # ============================================================
-# Main Page
-# ============================================================
+# ======================================================
+# MAIN PAGE
+# ======================================================
 
 st.markdown(
-    "<h1 class='big-title'>🤖 AI Retrieval Assistant</h1>",
-    unsafe_allow_html=True
+    "<div class='chat-title'>🤖 AI Retrieval Assistant</div>",
+    unsafe_allow_html=True,
 )
 
 st.markdown(
-    "<p class='subtitle'>Chat with your documents using Gemini 2.5 Flash + RAG</p>",
-    unsafe_allow_html=True
+    "<div class='chat-subtitle'>Chat with your documents using Gemini + RAG</div>",
+    unsafe_allow_html=True,
 )
 
 st.divider()
+# ======================================================
+# SAVE DOCUMENTS
+# ======================================================
 
-# ============================================================
-# User Question
-# ============================================================
+if uploaded_files:
 
-question = st.chat_input("Ask anything about your documents...")
+    os.makedirs("documents", exist_ok=True)
+
+    for uploaded_file in uploaded_files:
+
+        save_path = os.path.join(
+            "documents",
+            uploaded_file.name
+        )
+
+        with open(save_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+
+    st.success(f"✅ {len(uploaded_files)} file(s) uploaded successfully.")
+
+    if st.button("🚀 Build Knowledge Base"):
+
+        with st.spinner("Building Vector Database..."):
+
+            documents = []
+
+            for filename in os.listdir("documents"):
+
+                filepath = os.path.join(
+                    "documents",
+                    filename
+                )
+
+                try:
+
+                    if filename.lower().endswith(".txt"):
+
+                        loader = TextLoader(
+                            filepath,
+                            encoding="utf-8"
+                        )
+
+                    elif filename.lower().endswith(".pdf"):
+
+                        loader = PyPDFLoader(filepath)
+
+                    elif filename.lower().endswith(".docx"):
+
+                        loader = Docx2txtLoader(filepath)
+
+                    else:
+                        continue
+
+                    documents.extend(loader.load())
+
+                except Exception as e:
+
+                    st.warning(f"Skipping {filename}")
+
+            splitter = RecursiveCharacterTextSplitter(
+                chunk_size=1000,
+                chunk_overlap=200
+            )
+
+            chunks = splitter.split_documents(documents)
+
+            embedding = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-MiniLM-L6-v2"
+            )
+
+            db = FAISS.from_documents(
+                chunks,
+                embedding
+            )
+
+            db.save_local("vectorstore")
+
+            st.session_state.vector_db = db
+
+        st.success("✅ Knowledge Base Created Successfully!")
+
+        st.balloons()
+        # ======================================================
+# LOAD VECTOR DATABASE
+# ======================================================
+
+if st.session_state.vector_db is None:
+
+    if os.path.exists("vectorstore"):
+
+        embedding = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
+
+        st.session_state.vector_db = FAISS.load_local(
+            "vectorstore",
+            embedding,
+            allow_dangerous_deserialization=True
+        )       
+# ======================================================
+# CHAT INTERFACE
+# ======================================================
+
+db = st.session_state.vector_db
+
+if db is None:
+
+    st.info("""
+📂 Upload one or more PDF, DOCX or TXT files.
+
+Then click
+
+🚀 Build Knowledge Base
+
+to begin chatting with your documents.
+""")
+
+    st.stop()
+
+# ======================================================
+# DISPLAY CHAT HISTORY
+# ======================================================
+
+for message in st.session_state.messages:
+
+    with st.chat_message(message["role"]):
+
+        st.markdown(message["content"])
+
+# ======================================================
+# CHAT INPUT
+# ======================================================
+
+question = st.chat_input("💬 Ask a question about your documents...")
 
 if question:
 
-    # Save user message
     st.session_state.messages.append(
         {
             "role": "user",
@@ -287,21 +290,30 @@ if question:
         }
     )
 
-    # Display user message
     with st.chat_message("user"):
+
         st.markdown(question)
 
-    # Search FAISS
-    docs = db.similarity_search(question, k=4)
+    with st.chat_message("assistant"):
 
-    context = "\n\n".join([doc.page_content for doc in docs])
+        with st.spinner("🤖 Thinking..."):
 
-    prompt = f"""
-You are an intelligent AI assistant.
+            docs = db.similarity_search(
+                question,
+                k=4
+            )
 
-Answer ONLY using the information provided below.
+            context = "\n\n".join(
+                doc.page_content
+                for doc in docs
+            )
 
-If the answer is not available in the documents, politely say:
+            prompt = f"""
+You are an AI assistant.
+
+Use ONLY the context below.
+
+If the answer is not available, say:
 
 "I couldn't find that information in the uploaded documents."
 
@@ -313,12 +325,8 @@ Question:
 
 {question}
 
-Provide a clear, professional answer.
+Answer:
 """
-
-    with st.chat_message("assistant"):
-
-        with st.spinner("🤖 Gemini is thinking..."):
 
             try:
 
@@ -328,19 +336,19 @@ Provide a clear, professional answer.
 
             except Exception as e:
 
-                answer = f"❌ Error:\n\n{e}"
+                answer = f"❌ {e}"
 
-        st.markdown(answer)
+            st.markdown(answer)
 
-        with st.expander("📚 Retrieved Sources"):
+            with st.expander("📚 Retrieved Sources"):
 
-            for i, doc in enumerate(docs):
+                for i, doc in enumerate(docs, start=1):
 
-                st.markdown(f"### Source {i+1}")
+                    st.markdown(f"### Source {i}")
 
-                st.write(doc.page_content)
+                    st.write(doc.page_content)
 
-                st.divider()
+                    st.divider()
 
     st.session_state.messages.append(
         {
@@ -348,115 +356,84 @@ Provide a clear, professional answer.
             "content": answer
         }
     )
-    # ============================================================
-# Display Previous Chat History
-# ============================================================
-
-if len(st.session_state.messages) > 0:
-
-    st.divider()
-
-    st.subheader("💬 Conversation")
-
-    for message in st.session_state.messages:
-
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-else:
-
-    st.divider()
-
-    st.info("""
-👋 **Welcome!**
-
-Upload your TXT, PDF, or DOCX documents using the sidebar.
-
-Then ask questions like:
-
-• What is Artificial Intelligence?
-
-• Summarize this document.
-
-• Explain Machine Learning.
-
-• List the important points.
-
-Your assistant will search your documents first and then use Gemini to generate an accurate answer.
-""")
-# ============================================================
-# Download Conversation
-# ============================================================
-
-if st.session_state.messages:
-
-    conversation = ""
-
-    for msg in st.session_state.messages:
-
-        role = msg["role"].upper()
-
-        conversation += f"{role}\n"
-
-        conversation += msg["content"]
-
-        conversation += "\n\n"
-
-    st.download_button(
-
-        "📥 Download Conversation",
-
-        conversation,
-
-        file_name="conversation.txt",
-
-        mime="text/plain"
-
-    )
-    # ============================================================
-# Footer
-# ============================================================
-
-st.divider()
-
-st.markdown(
-"""
-<div style='text-align:center;color:gray;'>
-
-### 🚀 AI Retrieval Assistant
-
-Built with ❤️ using
-
-**Gemini 2.5 Flash • LangChain • HuggingFace • FAISS • Streamlit**
-
-Version 2.0
-
-</div>
-""",
-unsafe_allow_html=True
-)
-# ============================================================
-# Chat Statistics
-# ============================================================
+# ======================================================
+# SIDEBAR UTILITIES
+# ======================================================
 
 with st.sidebar:
 
     st.divider()
 
-    st.markdown("### 📊 Statistics")
+    st.subheader("📊 Statistics")
 
-    total_messages = len(st.session_state.messages)
+    st.metric("Uploaded Files", len(uploaded_files) if uploaded_files else 0)
 
-    user_questions = sum(
-        1 for m in st.session_state.messages
-        if m["role"] == "user"
+    st.metric("Messages", len(st.session_state.messages))
+
+    st.divider()
+
+    if st.button("🧹 Clear Chat"):
+
+        st.session_state.messages = []
+
+        st.rerun()
+
+    if st.session_state.messages:
+
+        chat_text = ""
+
+        for msg in st.session_state.messages:
+
+            role = msg["role"].capitalize()
+
+            chat_text += f"{role}: {msg['content']}\n\n"
+
+        st.download_button(
+            label="📥 Download Chat",
+            data=chat_text,
+            file_name="chat_history.txt",
+            mime="text/plain",
+        )
+
+    st.divider()
+
+    st.info(
+        """
+### 💡 Suggested Questions
+
+• Summarize this document
+
+• Give an abstract
+
+• What is the conclusion?
+
+• Explain the methodology
+
+• List the important points
+
+• Compare the topics
+
+• What are the advantages?
+
+• Give a short summary
+"""
     )
 
-    ai_answers = sum(
-        1 for m in st.session_state.messages
-        if m["role"] == "assistant"
-    )
+# ======================================================
+# FOOTER
+# ======================================================
 
-    st.metric("Messages", total_messages)
-    st.metric("Questions", user_questions)
-    st.metric("Answers", ai_answers)
+st.divider()
+
+st.markdown(
+    """
+<div style="text-align:center;color:gray;font-size:15px;">
+
+Made with ❤️ using
+
+<b>Google Gemini 2.5 Flash • LangChain • FAISS • Streamlit</b>
+
+</div>
+""",
+    unsafe_allow_html=True,
+)            
