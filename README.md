@@ -35,35 +35,35 @@ This enables:
 
 #  Features
 
-✅ Google Gemini 2.5 Flash Integration
+ Google Gemini 2.5 Flash Integration
 
-✅ Retrieval-Augmented Generation (RAG)
+ Retrieval-Augmented Generation (RAG)
 
-✅ LangChain Framework
+ LangChain Framework
 
-✅ FAISS Vector Database
+ FAISS Vector Database
 
-✅ HuggingFace Embeddings
+ HuggingFace Embeddings
 
-✅ Upload TXT Documents
+ Upload TXT Documents
 
-✅ Upload PDF Documents
+ Upload PDF Documents
 
-✅ Upload DOCX Documents
+ Upload DOCX Documents
 
-✅ Source References
+ Source References
 
-✅ Semantic Search
+ Semantic Search
 
-✅ Chat History
+ Chat History
 
-✅ Statistics Dashboard
+ Statistics Dashboard
 
-✅ Beautiful Dark UI
+ Beautiful Dark UI
 
-✅ Responsive Layout
+ Responsive Layout
 
-✅ Ready for Deployment
+ Ready for Deployment
 
 ---
 
@@ -288,15 +288,15 @@ https://www.linkedin.com/in/chanduvenkatpavanchadive33?utm_source=share_via&utm_
 
 ---
 
-# ⭐ Support
+# Star Support
 
 If you found this project useful,
 
-⭐ Star the repository
+ Star the repository
 
-🍴 Fork it
+ Fork it
 
-🛠 Contribute improvements
+ Contribute improvements
 
 ---
 
